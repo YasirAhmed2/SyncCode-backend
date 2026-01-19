@@ -20,11 +20,9 @@ app.use((req, res, next) => {
 
 /* ---------- MIDDLEWARE ---------- */
 app.use(cors({
-  origin: ["https://www.synccode.dev", "https://synccode.dev", "http://localhost:8080"],
+  origin: true, // Allow any origin for debugging (and because credentials are used)
   credentials: true
 }));
-
-
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -48,29 +46,42 @@ initSocket(server);
 
 /* ---------- START ---------- */
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, async () => {
+
+const startServer = async () => {
   try {
+    if (!process.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL is not defined");
+    }
+
     await mongoose.connect(process.env.DATABASE_URL);
     console.log("Database Connected Successfully");
+
+    // Only listen after DB is connected
+    server.listen(PORT, () => {
+      console.log(`Server running at http://localhost:${PORT}`);
+
+      if (!process.env.JWT_SECRET) {
+        console.error("FATAL ERROR: JWT_SECRET is not defined.");
+      }
+
+      console.log("Registered Routes:");
+      app._router.stack.forEach((r: any) => {
+        if (r.route && r.route.path) {
+          console.log(`[ROUTE] ${r.route.path}`);
+        } else if (r.name === 'router') {
+          const routerPathRegex = r.regexp.toString().replace(/^\/\^\\/, '').replace(/\\\/\?\(\?=\\\/\|\$\)\/i$/, '');
+          console.log(`[ROUTER] /${routerPathRegex} (${r.handle.name})`);
+        }
+      });
+    });
+
   } catch (error) {
-    console.log("DB Error:", error);
+    console.error("Failed to start server:", error);
+    process.exit(1);
   }
-  console.log(`Server running at http://localhost:${PORT}`);
+};
 
-  if (!process.env.JWT_SECRET) {
-    console.error("FATAL ERROR: JWT_SECRET is not defined.");
-  }
-
-  console.log("Registered Routes:");
-  app._router.stack.forEach((r: any) => {
-    if (r.route && r.route.path) {
-      console.log(`[ROUTE] ${r.route.path}`);
-    } else if (r.name === 'router') {
-      const routerPathRegex = r.regexp.toString().replace(/^\/\^\\/, '').replace(/\\\/\?\(\?=\\\/\|\$\)\/i$/, '');
-      console.log(`[ROUTER] /${routerPathRegex} (${r.handle.name})`);
-    }
-  });
-});
+startServer();
 
 process.on('uncaughtException', (err) => {
   console.error('UNCAUGHT EXCEPTION! 💥 Shutting down...');
