@@ -56,6 +56,15 @@ server.listen(PORT, async () => {
     console.log("DB Error:", error);
   }
   console.log(`Server running at http://localhost:${PORT}`);
+  console.log("Registered Routes:");
+  app._router.stack.forEach((r: any) => {
+    if (r.route && r.route.path) {
+      console.log(`[ROUTE] ${r.route.path}`);
+    } else if (r.name === 'router') {
+      const routerPathRegex = r.regexp.toString().replace(/^\/\^\\/, '').replace(/\\\/\?\(\?=\\\/\|\$\)\/i$/, '');
+      console.log(`[ROUTER] /${routerPathRegex} (${r.handle.name})`);
+    }
+  });
 });
 export default app;
 
