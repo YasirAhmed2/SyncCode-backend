@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --import tsconfig-paths/register src/index.ts",
-    "build": "tsc",
-    "start": "node dist/socket.js"
+    "build": "npx tsc",
+    "start": "node dist/index.js"
    
   },
   "keywords": [],
