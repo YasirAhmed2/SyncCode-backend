@@ -15,7 +15,7 @@ const app = express();
 
 /* ---------- MIDDLEWARE ---------- */
 app.use(cors({
-  origin: ["https://synccode.dev", "http://localhost:8080", "https://www.synccode.dev"],
+  origin: ["https://www.synccode.dev", "https://synccode.dev", "http://localhost:8080"],
   credentials: true
 }));
 
