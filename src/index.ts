@@ -13,35 +13,18 @@ import executeRouter from "./routes/execute.route.js";
 
 const app = express();
 
+app.use((req, res, next) => {
+  console.log(`[DEBUG] ${req.method} ${req.url} | Origin: ${req.headers.origin}`);
+  next();
+});
+
 /* ---------- MIDDLEWARE ---------- */
-// app.use(cors({
-//   origin: ["https://www.synccode.dev", "https://synccode.dev", "http://localhost:8080"],
-//   credentials: true
-// }));
-/* ===== CORS (MUST BE FIRST) ===== */
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-
-    const allowed = [
-      "https://www.synccode.dev",
-      "https://synccode.dev",
-      "http://localhost:8080"
-    ];
-
-    if (allowed.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(null, false);
-    }
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
+  origin: ["https://www.synccode.dev", "https://synccode.dev", "http://localhost:8080"],
+  credentials: true
 }));
 
-/* ===== PRE-FLIGHT FIX (THIS LINE SOLVES YOUR ERROR) ===== */
-app.options("*", cors());
+
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

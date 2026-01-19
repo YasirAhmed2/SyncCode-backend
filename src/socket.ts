@@ -9,7 +9,7 @@ const initSocket = (server: HttpServer) => {
     const io = new Server(server, {
         cors: {
             // Allow both frontend ports and localhost
-            origin: ['https://api.synccode.dev', 'http://localhost:8080'],
+            origin: ["https://www.synccode.dev", "https://synccode.dev", "http://localhost:8080"],
             methods: ['GET', 'POST'],
             credentials: true,
         },
