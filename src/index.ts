@@ -56,6 +56,11 @@ server.listen(PORT, async () => {
     console.log("DB Error:", error);
   }
   console.log(`Server running at http://localhost:${PORT}`);
+
+  if (!process.env.JWT_SECRET) {
+    console.error("FATAL ERROR: JWT_SECRET is not defined.");
+  }
+
   console.log("Registered Routes:");
   app._router.stack.forEach((r: any) => {
     if (r.route && r.route.path) {
@@ -66,5 +71,20 @@ server.listen(PORT, async () => {
     }
   });
 });
+
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION! 💥 Shutting down...');
+  console.error(err.name, err.message, err.stack);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (err: any) => {
+  console.error('UNHANDLED REJECTION! 💥 Shutting down...');
+  console.error(err.name, err.message, err.stack);
+  server.close(() => {
+    process.exit(1);
+  });
+});
+
 export default app;
 
