@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --import tsconfig-paths/register src/index.ts",
-    "start": "node index.js"
+   
+    "start": "node src/index.js"
   },
   "keywords": [],
   "author": "Yasir Ahmed",
