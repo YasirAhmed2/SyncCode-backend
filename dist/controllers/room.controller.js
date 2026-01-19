@@ -1,5 +1,5 @@
-import Room from "@/models/room.mongo.js";
-import { generateRoomId } from "@/utils/roomId.utils.js";
+import Room from "../models/room.mongo.js";
+import { generateRoomId } from "../utils/roomId.utils.js";
 export const createRoom = async (req, res) => {
     try {
         const userId = req.user?.userId;

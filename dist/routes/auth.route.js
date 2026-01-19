@@ -1,10 +1,10 @@
 import express from "express";
-import { validate } from "@/middlewares/zod.validation.js";
-import { signupSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema } from "@/types/zod.types.js";
-import { Signup, Signin } from "@/controllers/auth.controller.js";
-import { resetPassword, sendOtp, verifyOtp, logoutUser } from "@/controllers/auth.controller.js";
-import { authenticate } from "@/middlewares/auth.middleware.js";
-import { verifyEmailOtp } from "@/controllers/auth.controller.js";
+import { validate } from "../middlewares/zod.validation.js";
+import { signupSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema } from "../types/zod.types.js";
+import { Signup, Signin } from "../controllers/auth.controller.js";
+import { resetPassword, sendOtp, verifyOtp, logoutUser } from "../controllers/auth.controller.js";
+import { authenticate } from "../middlewares/auth.middleware.js";
+import { verifyEmailOtp } from "../controllers/auth.controller.js";
 const authRouter = express.Router();
 authRouter.post("/register", validate(signupSchema), async (req, res) => {
     const userData = req.body;

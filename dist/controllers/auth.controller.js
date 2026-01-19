@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import User from "@/models/user.mongo.js";
+import User from "../models/user.mongo.js";
 import { generateToken } from "../utils/jwt.utils.js";
 import * as crypto from "crypto";
 import { sendEmail } from "../services/email.service.js";
