@@ -143,8 +143,8 @@ export const verifyOtp = async (req, res) => {
     await user.save();
     res.cookie("AUTH_JWT", resetToken, {
         httpOnly: true,
-        secure: false,
-        sameSite: "lax",
+        secure: true,
+        sameSite: "none",
         maxAge: 10 * 60 * 1000
     });
     res.json({ message: "OTP verified", resetToken });

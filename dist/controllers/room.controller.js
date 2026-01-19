@@ -7,11 +7,15 @@ export const createRoom = async (req, res) => {
             return res.status(401).json({ message: "Unauthorized" });
         }
         const { language } = req.body;
+        const defaultCode = language === "python"
+            ? "print('Hello, World!')"
+            : "console.log('Hello, World!');";
         const room = await Room.create({
             roomId: generateRoomId(),
             createdBy: userId,
             participants: [userId],
             language: language || "javascript",
+            code: defaultCode,
         });
         res.status(201).json({
             success: true,
@@ -28,81 +32,42 @@ export const createRoom = async (req, res) => {
         res.status(500).json({ message: "Server error" });
     }
 };
-// export const joinRoom = async (req, res: Response) => {
-//   try {
-//     const userId = req.user?.userId;
-//     const { roomId } = req.params;
-// console.log("Room ID:", roomId);
-//     if (!userId) {
-//       return res.status(401).json({ message: "Unauthorized" });
-//     }
-//     const room = await Room.findOne({ roomId });
-//     if (!room) {
-//       return res.status(404).json({ message: "Room not found" });
-//     }
-//     // Prevent duplicate join
-//     if (room.participants.includes(userId)) {
-//       return res.status(400).json({ message: "User already joined room" });
-//     }
-//     room.participants.push(userId);
-//     await room.save();
-//     res.status(200).json({
-//       success: true,
-//       message: "Joined room successfully",
-//       room: {
-//         roomId: room.roomId,
-//         participantsCount: room.participants.length,
-//         language: room.language,
-//       },
-//     });
-//     const messages = await Chat.find({ roomId })
-//   .populate("sender", "name email")
-//   .sort({ createdAt: 1 })
-//   .limit(50);
-// // @ts-ignore
-// Socket.emit("chat-history", messages);
-//   } catch (error) {
-//     console.error("Join room error:", error);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
 export const joinRoom = async (req, res) => {
     try {
-        const userId = req.user?.userId; // Use consistent property
-        const roomId = req.params.roomId;
-        const room = await Room.findOne({
-            roomId: roomId,
-        }).populate("participants", "name email");
+        const userId = req.user?.userId;
+        const { roomId } = req.params;
+        if (!userId) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        const room = await Room.findOne({ roomId });
         if (!room) {
-            return res.status(404).json({
-                success: false,
-                message: "Room not found",
-            });
+            return res.status(404).json({ message: "Room not found" });
         }
-        // Add user to participants if not already
-        const isParticipant = room.participants.some((p) => p._id.toString() === userId.toString());
+        // Prevent duplicate join, but ensure user is in participants list
+        // Mongoose ObjectIDs need careful comparison, but 'includes' might not work directly with ObjectIDs if strictly typed.
+        // Ideally we cast to string. However, let's follow the schema which is ObjectId[].
+        const isParticipant = room.participants.some((p) => p.toString() === userId);
         if (!isParticipant) {
-            room.participants.push(userId); // Mongoose handles ID casting
+            room.participants.push(userId);
             await room.save();
-            // Re-populate to get the new user's details
-            await room.populate("participants", "name email");
         }
+        // Re-fetch populated to return to user
+        const populatedRoom = await Room.findOne({ roomId }).populate("participants", "name email");
         res.status(200).json({
             success: true,
+            message: "Joined room successfully",
             room: {
                 roomId: room.roomId,
+                participantsCount: room.participants.length,
                 language: room.language,
                 code: room.code,
-                participants: room.participants,
+                participants: populatedRoom?.participants,
             },
         });
     }
     catch (error) {
-        console.error(error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to join room",
-        });
+        console.error("Join room error:", error);
+        res.status(500).json({ message: "Server error" });
     }
 };
 export const getRoomDetails = async (req, res) => {
@@ -124,6 +89,8 @@ export const getRoomDetails = async (req, res) => {
                 createdBy: room.createdBy,
                 participants: room.participants,
                 totalParticipants: room.participants.length,
+                language: room.language,
+                code: room.code,
             },
         });
     }
@@ -137,52 +104,14 @@ export const saveRoomCode = async (req, res) => {
         const { roomId } = req.params;
         const { code, language } = req.body;
         const userId = req.user?.userId;
-        // ... (rest is unchanged)
-        // Actually I should not replace the whole file if I can avoid it, but replace multiple functions is cleaner 
-        // to ensure no scope issues. But let's stick to the instruction: replace chunks via replace_file_content 
-        // or simply replace the specific functions.
-        // I will use replace for joinRoom first.
-        // Wait, I can only use replace_file_content for a single block.
-        // I need to change joinRoom AND getMyRooms.
-        // I will use multi_replace for this.
-        // Cancelling this single replace and using multi_replace.
-    }
-    catch (error) {
-        //...
-    }
-};
-export const getRoomDetails = async (req, res) => {
-    try {
-        const { roomId } = req.params;
-        const room = await Room.findOne({ roomId })
-            .populate("createdBy", "name email")
-            .populate("participants", "name email");
-        if (!room) {
-            return res.status(404).json({
-                success: false,
-                message: "Room not found",
-            });
+        if (!code && !language) { // Allow saving just one or the other, or both.
+            // actually the requirements usually imply strictness, but let's allow partial updates if needed, 
+            // OR stick to the previous logic: "Code and language are required"
+            // I'll assume at least one is needed for an update.
         }
-        return res.status(200).json({
-            success: true,
-            data: {
-                roomId: room.roomId,
-                createdBy: room.createdBy,
-                participants: room.participants,
-                totalParticipants: room.participants.length,
-            },
-        });
-    }
-    catch (error) {
-        console.error("Get room details error:", error);
-        res.status(500).json({ message: "Server error" });
-    }
-};
-export const saveRoomCode = async (req, res) => {
-    try {
-        const { roomId } = req.params;
-        const { code, language } = req.body;
-        const userId = req.user?.userId;
+        // Previous logic was strict. Let's keep it strict if that's safer, or allow relaxed.
+        // The previous valid function had: if (!code || !language).
+        // I will stick to that to be safe.
         if (!code || !language) {
             return res.status(400).json({
                 message: "Code and language are required",
@@ -193,7 +122,8 @@ export const saveRoomCode = async (req, res) => {
             return res.status(404).json({ message: "Room not found" });
         }
         // Only participants can save code
-        if (!room.participants.includes(userId)) {
+        const isParticipant = room.participants.some((p) => p.toString() === userId);
+        if (!isParticipant) {
             return res.status(403).json({
                 message: "You are not a participant of this room",
             });
@@ -220,7 +150,8 @@ export const loadRoomCode = async (req, res) => {
             return res.status(404).json({ message: "Room not found" });
         }
         // Only participants can view code
-        if (!room.participants.includes(userId)) {
+        const isParticipant = room.participants.some((p) => p.toString() === userId);
+        if (!isParticipant) {
             return res.status(403).json({
                 message: "You are not a participant of this room",
             });
@@ -241,7 +172,6 @@ export const loadRoomCode = async (req, res) => {
 export const getMyRooms = async (req, res) => {
     try {
         const userId = req.user?.userId;
-        console.log("Fetching rooms for userId:", userId);
         const rooms = await Room.find({
             $or: [
                 { createdBy: userId },
@@ -256,7 +186,7 @@ export const getMyRooms = async (req, res) => {
         });
     }
     catch (error) {
-        console.error(error);
+        console.error("Get my rooms error:", error);
         res.status(500).json({
             success: false,
             message: "Failed to fetch rooms",
