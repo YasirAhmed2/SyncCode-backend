@@ -10,6 +10,7 @@ import authRouter from "./routes/auth.route.js";
 import userRouter from "./routes/user.route.js";
 import roomRouter from "./routes/room.route.js";
 import executeRouter from "./routes/execute.route.js";
+import { globalErrorHandler } from "./middlewares/error.middleware.js";
 
 const app = express();
 
@@ -20,7 +21,20 @@ app.use((req, res, next) => {
 
 /* ---------- MIDDLEWARE ---------- */
 app.use(cors({
-  origin: true, // Allow any origin for debugging (and because credentials are used)
+  origin: (origin, callback) => {
+    const allowedOrigins = [
+      "https://www.synccode.dev",
+      "https://synccode.dev",
+      "http://localhost:8080",
+      ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",") : [])
+    ];
+
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true
 }));
 
@@ -33,6 +47,8 @@ app.use("/auth", authRouter);
 app.use("/execute", executeRouter);
 app.use("/user", userRouter);
 app.use("/rooms", roomRouter);
+
+app.use(globalErrorHandler);
 
 app.get("/", (req, res) => {
   res.json({ message: "Welcome to SyncCode Backend API" });
