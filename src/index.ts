@@ -81,14 +81,18 @@ const startServer = async () => {
       }
 
       console.log("Registered Routes:");
-      app._router.stack.forEach((r: any) => {
-        if (r.route && r.route.path) {
-          console.log(`[ROUTE] ${r.route.path}`);
-        } else if (r.name === 'router') {
-          const routerPathRegex = r.regexp.toString().replace(/^\/\^\\/, '').replace(/\\\/\?\(\?=\\\/\|\$\)\/i$/, '');
-          console.log(`[ROUTER] /${routerPathRegex} (${r.handle.name})`);
-        }
-      });
+      if (app._router && app._router.stack) {
+        app._router.stack.forEach((r: any) => {
+          if (r.route && r.route.path) {
+            console.log(`[ROUTE] ${r.route.path}`);
+          } else if (r.name === 'router') {
+            const routerPathRegex = r.regexp.toString().replace(/^\/\^\\/, '').replace(/\\\/\?\(\?=\\\/\|\$\)\/i$/, '');
+            console.log(`[ROUTER] /${routerPathRegex} (${r.handle.name})`);
+          }
+        });
+      } else {
+        console.log("Router stack not available for logging.");
+      }
     });
 
   } catch (error) {
