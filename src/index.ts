@@ -79,10 +79,12 @@ const server = http.createServer(app);
 initSocket(server);
 
 /* ---------- START ---------- */
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT;
 
 const startServer = async () => {
   try {
+    const PORT = process.env.PORT || 5000;
+
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL is not defined");
     }
@@ -90,36 +92,18 @@ const startServer = async () => {
     await mongoose.connect(process.env.DATABASE_URL);
     console.log("Database Connected Successfully");
 
-    // Only listen after DB is connected
     server.listen(PORT, () => {
-      console.log(`Server running at http://localhost:${PORT}`);
-
-      if (!process.env.JWT_SECRET) {
-        console.error("FATAL ERROR: JWT_SECRET is not defined.");
-      }
-
-      console.log("Registered Routes:");
-      if (app._router && app._router.stack) {
-        app._router.stack.forEach((r: any) => {
-          if (r.route && r.route.path) {
-            console.log(`[ROUTE] ${r.route.path}`);
-          } else if (r.name === 'router') {
-            const routerPathRegex = r.regexp.toString().replace(/^\/\^\\/, '').replace(/\\\/\?\(\?=\\\/\|\$\)\/i$/, '');
-            console.log(`[ROUTER] /${routerPathRegex} (${r.handle.name})`);
-          }
-        });
-      } else {
-        console.log("Router stack not available for logging.");
-      }
+      console.log(`Server running on port ${PORT}`);
     });
 
   } catch (error) {
-    console.error("Failed to start server:", error);
+    console.error("Startup failed:", error);
     process.exit(1);
   }
 };
 
 startServer();
+
 
 process.on('uncaughtException', (err) => {
   console.error('UNCAUGHT EXCEPTION! 💥 Shutting down...');
