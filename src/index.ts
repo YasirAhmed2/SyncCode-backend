@@ -22,6 +22,8 @@ app.use((req, res, next) => {
 /* ---------- MIDDLEWARE ---------- */
 // import cors from "cors";
 
+// import cors from "cors";
+
 const allowedOrigins = [
   "https://www.synccode.dev",
   "https://synccode.dev",
@@ -29,22 +31,29 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true); // allow Postman / server requests
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
 
     if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("CORS not allowed"));
+      return callback(null, true);
     }
+
+    callback(new Error("Not allowed by CORS"));
   },
+  credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
-// 🚨 VERY IMPORTANT (handles preflight)
-app.options("*", cors());
+// ✅ Explicit OPTIONS handler WITHOUT "*"
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    res.sendStatus(204);
+  } else {
+    next();
+  }
+});
+
 
 
 app.use(express.json());
