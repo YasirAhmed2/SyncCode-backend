@@ -20,23 +20,32 @@ app.use((req, res, next) => {
 });
 
 /* ---------- MIDDLEWARE ---------- */
-app.use(cors({
-  origin: (origin, callback) => {
-    const allowedOrigins = [
-      "https://www.synccode.dev",
-      "https://synccode.dev",
-      "http://localhost:8080",
-      ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",") : [])
-    ];
+// import cors from "cors";
 
-    if (!origin || allowedOrigins.includes(origin)) {
+const allowedOrigins = [
+  "https://www.synccode.dev",
+  "https://synccode.dev",
+  "http://localhost:5173"
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true); // allow Postman / server requests
+
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error("Not allowed by CORS"));
+      callback(new Error("CORS not allowed"));
     }
   },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }));
+
+// 🚨 VERY IMPORTANT (handles preflight)
+app.options("*", cors());
+
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
