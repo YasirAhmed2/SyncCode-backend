@@ -10,22 +10,22 @@ import { sendEmail } from "../services/email.service.js";
 async function Signup(userData) {
 
   // const { name, email, password } = req.body;
-console.log("Signup request received with data:", userData);
-  
+  console.log("Signup request received with data:", userData);
+
 
 
   const hashedPassword = await bcrypt.hash(userData.password, 10);
 
   const userCreated = new User({
-     name: userData.name,
+    name: userData.name,
     email: userData.email,
-   
+
     password: hashedPassword,
-   provider: "local",
+    provider: "local",
     isEmailVerified: false
   });
 
-  
+
 
 
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -41,7 +41,7 @@ console.log("Signup request received with data:", userData);
   const user = await userCreated.save();
   // await user.save();
 
- 
+
   await sendEmail(
     user.email,
     "Verify Your SyncCode Account",
@@ -54,7 +54,7 @@ console.log("Signup request received with data:", userData);
   );
 
 
-    const signedData = await generateToken({
+  const signedData = await generateToken({
     userId: user._id.toString(),
     name: user.name,
     email: user.email,
@@ -123,7 +123,7 @@ async function Signin(userData) {
       userData.password,
       userExists.password
     );
-    
+
     if (!passwordCheck) {
       return null;
     }
@@ -133,21 +133,21 @@ async function Signin(userData) {
       name: userExists.name,
       email: userExists.email,
     });
-    
+
     return {
       userId: userExists._id.toString(),
       name: userExists.name,
       email: userExists.email,
       signedData,
     };
-    
+
   } catch (error) {
     console.error("Signin ERROR: ", error);
-    
+
     if (error.message === "EMAIL_NOT_VERIFIED") {
-      throw error; 
+      throw error;
     }
-    
+
     return null;
   }
 }
@@ -161,7 +161,7 @@ export const sendOtp = async (req, res) => {
 
   const user = await User.findOne({ email });
   if (!user) {
-    
+
     return res.status(404).json({ message: "User not found" });
   }
 

@@ -5,7 +5,7 @@ const PRIVATE_KEY = process.env.JWT_SECRET;
 
 export const generateToken = (
   payload: object,
-  expiresIn: string = "15m"
+  expiresIn: string = "45m"
 ) => {
   return jwt.sign(payload, PRIVATE_KEY, { expiresIn });
 };
