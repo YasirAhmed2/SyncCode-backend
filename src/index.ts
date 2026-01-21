@@ -11,6 +11,7 @@ import userRouter from "./routes/user.route.js";
 import roomRouter from "./routes/room.route.js";
 import executeRouter from "./routes/execute.route.js";
 import { globalErrorHandler } from "./middlewares/error.middleware.js";
+import fs from "fs";
 
 const app = express();
 
@@ -68,6 +69,10 @@ app.get("/", (req, res) => {
   res.json({ message: "Welcome to SyncCode Backend API" });
 });
 
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
+});
+
 /* ---------- SERVER ---------- */
 const server = http.createServer(app);
 
@@ -78,23 +83,20 @@ initSocket(server);
 const PORT = process.env.PORT;
 
 const startServer = async () => {
-  try {
-    const PORT = process.env.PORT || 5000;
+  const PORT = process.env.PORT || 5000;
 
+  server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+
+  try {
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL is not defined");
     }
-
     await mongoose.connect(process.env.DATABASE_URL);
     console.log("Database Connected Successfully");
-
-    server.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
-
   } catch (error) {
-    console.error("Startup failed:", error);
-    process.exit(1);
+    console.error("Database connection failed:", error);
   }
 };
 
@@ -104,12 +106,22 @@ startServer();
 process.on('uncaughtException', (err) => {
   console.error('UNCAUGHT EXCEPTION! 💥 Shutting down...');
   console.error(err.name, err.message, err.stack);
+  try {
+    fs.writeFileSync('crash_uncaught.log', `Error: ${err.message}\nStack: ${err.stack}\n`);
+  } catch (e) {
+    console.error("Failed to write crash log", e);
+  }
   process.exit(1);
 });
 
 process.on('unhandledRejection', (err: any) => {
   console.error('UNHANDLED REJECTION! 💥 Shutting down...');
   console.error(err.name, err.message, err.stack);
+  try {
+    fs.writeFileSync('crash.log', `Error: ${err.message}\nStack: ${err.stack}\n`);
+  } catch (e) {
+    console.error("Failed to write crash log", e);
+  }
   server.close(() => {
     process.exit(1);
   });

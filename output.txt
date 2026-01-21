@@ -1,0 +1,9 @@
+Socket.IO attached
+Database Connected Successfully
+UNCAUGHT EXCEPTION! 💥 Shutting down...
+Error listen EADDRINUSE: address already in use :::5000 Error: listen EADDRINUSE: address already in use :::5000
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at startServer (file:///D:/BSCS/Semester%205/backend/dist/index.js:71:16)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
