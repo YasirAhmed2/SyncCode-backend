@@ -1,12 +1,12 @@
 import nodemailer from "nodemailer";
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: false, // true for 465, false for 587
+  host: "smtp-relay.brevo.com",
+  port: 587,
+  secure: false,
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    user: process.env.BREVO_SMTP_USER,
+    pass: process.env.BREVO_SMTP_PASS,
   },
 });
 
@@ -17,13 +17,13 @@ export const sendEmail = async (
 ) => {
   try {
     await transporter.sendMail({
-      from: `"SyncCode Support" <${process.env.EMAIL_USER}>`,
+      from: `"SyncCode Support" <yasirahmed9921@gmail.com>`,
       to,
       subject,
       html,
     });
   } catch (error: any) {
-    console.error("Email sending failed:", error.message);
+    console.error("Email sending failed:", error);
     throw new Error("Email could not be sent");
   }
 };
