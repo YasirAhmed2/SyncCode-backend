@@ -12,7 +12,7 @@ authRouter.post("/register", validate(signupSchema), async (req, res) => {
   const userData = req.body;
   console.log("Registering user with data:", userData);
   const userCreated = await Signup(userData);
-  res.cookie("AUTH_JWT", userCreated.signedData, {
+  res.cookie("auth_jwt", userCreated.signedData, {
     httpOnly: true, 
   });
 
@@ -32,8 +32,8 @@ authRouter.post("/login", validate(loginSchema), async (req, res) => {
   } else {
     res.cookie("auth_jwt", signInReq.signedData, {
     httpOnly: true,
-    sameSite: "lax",
-    secure: false // true in production
+    sameSite: "none",
+    secure: true // true in production
   }).status(200).json({
       user: signInReq.userId,
       name: signInReq.name,

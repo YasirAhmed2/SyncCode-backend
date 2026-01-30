@@ -219,7 +219,7 @@ export const verifyOtp = async (req, res) => {
   user.otpExpire = undefined;
   await user.save();
 
-  res.cookie("AUTH_JWT", resetToken, {
+  res.cookie("auth_jwt", resetToken, {
     httpOnly: true,
     secure: true,
     sameSite: "none",
@@ -241,13 +241,13 @@ export const resetPassword = async (req, res) => {
   user.password = await bcrypt.hash(newPassword, 10);
   await user.save();
 
-  res.clearCookie("AUTH_JWT");
+  res.clearCookie("auth_jwt");
 
   res.json({ message: "Password reset successful" });
 };
 
 export const logoutUser = (req, res) => {
-  res.clearCookie("AUTH_JWT");
+  res.clearCookie("auth_jwt");
   res.json({ msg: "Logged out successfully" });
 }
 
