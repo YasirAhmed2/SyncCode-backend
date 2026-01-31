@@ -27,9 +27,6 @@ const allowedOrigins = [
   "http://localhost:8080"
 ];
 
-/* -------------------------------------------------- */
-/* ✅ HARD OPTIONS HANDLER (NODE 22 SAFE) */
-/* -------------------------------------------------- */
 app.use((req, res, next) => {
   if (req.method === "OPTIONS") {
     const origin = req.headers.origin as string | undefined;
@@ -54,9 +51,7 @@ app.use((req, res, next) => {
   next();
 });
 
-/* -------------------------------------------------- */
-/* 🌍 CORS (NO CALLBACK, NO ERRORS) */
-/* -------------------------------------------------- */
+
 app.use(
   cors({
     origin: allowedOrigins,
@@ -64,32 +59,23 @@ app.use(
   })
 );
 
-/* -------------------------------------------------- */
-/* 🧠 BODY + COOKIE */
-/* -------------------------------------------------- */
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-/* -------------------------------------------------- */
-/* 🔍 DEBUG LOG */
-/* -------------------------------------------------- */
+
 app.use((req, res, next) => {
   console.log(`[${req.method}] ${req.url} | Origin: ${req.headers.origin}`);
   next();
 });
 
-/* -------------------------------------------------- */
-/* 🚦 ROUTES */
-/* -------------------------------------------------- */
 app.use("/auth", authRouter);
 app.use("/execute", executeRouter);
 app.use("/user", userRouter);
 app.use("/rooms", roomRouter);
 
-/* -------------------------------------------------- */
-/* 🩺 HEALTH */
-/* -------------------------------------------------- */
+
 app.get("/", (_req, res) => {
   res.json({ message: "Welcome to SyncCode Backend API" });
 });
@@ -98,20 +84,12 @@ app.get("/health", (_req, res) => {
   res.status(200).send("OK");
 });
 
-/* -------------------------------------------------- */
-/* ❌ GLOBAL ERROR HANDLER */
-/* -------------------------------------------------- */
+
 app.use(globalErrorHandler);
 
-/* -------------------------------------------------- */
-/* 🚀 SERVER + SOCKET */
-/* -------------------------------------------------- */
 const server = http.createServer(app);
 initSocket(server);
 
-/* -------------------------------------------------- */
-/* 🗄️ DB + START */
-/* -------------------------------------------------- */
 const startServer = async () => {
   try {
     const PORT = process.env.PORT || 5000;
@@ -121,22 +99,20 @@ const startServer = async () => {
     }
 
     await mongoose.connect(process.env.DATABASE_URL);
-    console.log("✅ Database connected");
+    console.log("Database connected");
 
     server.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(` Server running on port ${PORT}`);
     });
   } catch (error: any) {
-    console.error("❌ Startup failed:", error.message);
+    console.error("Startup failed:", error.message);
     process.exit(1);
   }
 };
 
 startServer();
 
-/* -------------------------------------------------- */
-/* 💥 SAFETY */
-/* -------------------------------------------------- */
+
 process.on("uncaughtException", (err) => {
   console.error("UNCAUGHT EXCEPTION 💥", err);
   try {

@@ -10,7 +10,7 @@ import { sendEmail } from "../services/email.service.js";
 async function Signup(userData) {
 
   // const { name, email, password } = req.body;
-  console.log("Signup request received with data:", userData);
+ 
 
 
 

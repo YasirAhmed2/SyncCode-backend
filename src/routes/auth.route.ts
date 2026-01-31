@@ -10,7 +10,6 @@ const authRouter=express.Router();
 
 authRouter.post("/register", validate(signupSchema), async (req, res) => {
   const userData = req.body;
-  console.log("Registering user with data:", userData);
   const userCreated = await Signup(userData);
   res.cookie("auth_jwt", userCreated.signedData, {
     httpOnly: true, 

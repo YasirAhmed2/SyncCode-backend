@@ -60,10 +60,7 @@ export const joinRoom = async (req: any, res: Response) => {
       return res.status(404).json({ message: "Room not found" });
     }
 
-    // Prevent duplicate join, but ensure user is in participants list
-    // Mongoose ObjectIDs need careful comparison, but 'includes' might not work directly with ObjectIDs if strictly typed.
-    // Ideally we cast to string. However, let's follow the schema which is ObjectId[].
-
+   
     const isParticipant = room.participants.some(
       (p: any) => p.toString() === userId
     );
