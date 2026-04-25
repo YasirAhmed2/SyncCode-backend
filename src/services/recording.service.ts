@@ -118,7 +118,7 @@ export async function stopRecording(roomId: string): Promise<void> {
 
 // ─── ANALYTICS ───────────────────────────────────────────────────────────────
 
-async function computeAnalytics(
+export async function computeAnalytics(
   events: ISessionEvent[],
   startedAt: Date,
   endedAt: Date
@@ -194,7 +194,15 @@ export async function getLatestRecording(roomId: string) {
 }
 
 export async function getLatestReport(roomId: string) {
-  return SessionRecording.findOne({ roomId, endedAt: { $ne: null } })
+  // First try to find a completed session with analytics
+  const completed = await SessionRecording.findOne({ roomId, endedAt: { $ne: null } })
     .sort({ startedAt: -1 })
-    .select('roomId startedAt endedAt analytics');
+    .select('roomId startedAt endedAt analytics events');
+
+  if (completed) return completed;
+
+  // Fall back to the active (in-progress) session so teachers can view live reports
+  return SessionRecording.findOne({ roomId })
+    .sort({ startedAt: -1 })
+    .select('roomId startedAt endedAt analytics events');
 }

@@ -51,6 +51,7 @@ export const getRecording = async (req: any, res: Response) => {
 
 // ─── GET REPORT (analytics) ───────────────────────────────────────────────────
 // Teacher sees full report. Student sees only their own stat row.
+// Works for both completed and in-progress sessions.
 export const getReport = async (req: any, res: Response) => {
   try {
     const { roomId } = req.params;
@@ -70,16 +71,27 @@ export const getReport = async (req: any, res: Response) => {
     const report = await RecordingService.getLatestReport(roomId);
 
     if (!report) {
-      return res.status(404).json({ message: 'No completed session found' });
+      return res.status(404).json({ message: 'No session found for this room' });
     }
 
     const isTeacher = room.teacherId?.toString() === userId;
-    const analytics = report.analytics;
+
+    // Use pre-computed analytics if available, otherwise compute live analytics
+    let analytics = report.analytics;
+    if (!analytics && report.events && report.events.length > 0) {
+      // Active session — compute analytics on-the-fly
+      const endTime = report.endedAt || new Date();
+      analytics = await RecordingService.computeAnalytics(
+        report.events,
+        report.startedAt,
+        endTime
+      );
+    }
 
     if (!analytics) {
       return res.status(200).json({
         success: true,
-        data: { roomId, roomName: room.name, message: 'Analytics not yet generated' },
+        data: { roomId, roomName: room.name, message: 'Analytics not yet generated — no activity recorded' },
       });
     }
 
@@ -88,10 +100,8 @@ export const getReport = async (req: any, res: Response) => {
       ? analytics.userStats
       : analytics.userStats.filter((s) => s.userId === userId);
 
-    const sessionDurationMs =
-      report.endedAt && report.startedAt
-        ? report.endedAt.getTime() - report.startedAt.getTime()
-        : 0;
+    const endTime = report.endedAt || new Date();
+    const sessionDurationMs = endTime.getTime() - report.startedAt.getTime();
 
     return res.status(200).json({
       success: true,
@@ -100,6 +110,7 @@ export const getReport = async (req: any, res: Response) => {
         roomName: room.name,
         startedAt: report.startedAt,
         endedAt: report.endedAt,
+        isActive: !report.endedAt,
         sessionDurationMs,
         isTeacher,
         analytics: {
@@ -116,3 +127,4 @@ export const getReport = async (req: any, res: Response) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
