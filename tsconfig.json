@@ -8,6 +8,7 @@
     "moduleResolution": "NodeNext",
     "esModuleInterop": true,
     "strict": false,
+    "skipLibCheck": true,
     "baseUrl": "./src",
     "allowJs": true,
     "paths": {

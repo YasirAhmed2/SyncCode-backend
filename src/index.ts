@@ -5,6 +5,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import http from "http";
 import fs from "fs";
+import type { Request } from "express";
 
 import initSocket from "./socket.js";
 
@@ -12,53 +13,64 @@ import authRouter from "./routes/auth.route.js";
 import userRouter from "./routes/user.route.js";
 import roomRouter from "./routes/room.route.js";
 import executeRouter from "./routes/execute.route.js";
+import sessionRouter from "./routes/session.route.js";
 import { globalErrorHandler } from "./middlewares/error.middleware.js";
 
 const app = express();
+app.set("trust proxy", 1);
 
-/* -------------------------------------------------- */
-/* 🌍 ALLOWED ORIGINS */
-/* -------------------------------------------------- */
-const allowedOrigins = [
+const defaultAllowedOrigins = [
   "https://www.synccode.dev",
   "https://synccode.dev",
   "http://localhost:5173",
   "http://localhost:3000",
-  "http://localhost:8080"
+  "http://localhost:8080",
+  "https://synccode-backend-production.up.railway.app"
 ];
 
-app.use((req, res, next) => {
-  if (req.method === "OPTIONS") {
-    const origin = req.headers.origin as string | undefined;
+const envAllowedOrigins = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
-    if (origin && allowedOrigins.includes(origin)) {
-      res.header("Access-Control-Allow-Origin", origin);
-    }
+const allowedOriginSet = new Set([...defaultAllowedOrigins, ...envAllowedOrigins]);
 
-    res.header("Access-Control-Allow-Credentials", "true");
-    res.header(
-      "Access-Control-Allow-Methods",
-      "GET,POST,PUT,DELETE,PATCH,OPTIONS"
-    );
-    res.header(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Requested-With, Accept"
-    );
+const allowedOriginPatterns = [
+  /^https?:\/\/localhost(?::\d+)?$/i,
+  /^https:\/\/([a-z0-9-]+\.)?synccode\.dev$/i,
+  /^https:\/\/[a-z0-9-]+\.vercel\.app$/i,
+  /^https:\/\/[a-z0-9-]+\.netlify\.app$/i
+];
 
-    return res.sendStatus(204);
+const isAllowedOrigin = (origin: string) => {
+  if (allowedOriginSet.has(origin)) {
+    return true;
   }
 
-  next();
-});
+  return allowedOriginPatterns.some((pattern) => pattern.test(origin));
+};
 
+const corsOptionsDelegate: cors.CorsOptionsDelegate<Request> = (req, callback) => {
+  const requestOrigin = req.header("Origin");
 
-app.use(
-  cors({
-    origin: allowedOrigins,
-    credentials: true
-  })
-);
+  // Non-browser requests (no Origin header) should continue to work.
+  if (!requestOrigin) {
+    return callback(null, { origin: true, credentials: true });
+  }
 
+  if (isAllowedOrigin(requestOrigin)) {
+    return callback(null, {
+      origin: requestOrigin,
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
+    });
+  }
+
+  return callback(null, { origin: false });
+};
+
+app.use(cors(corsOptionsDelegate));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -74,6 +86,7 @@ app.use("/auth", authRouter);
 app.use("/execute", executeRouter);
 app.use("/user", userRouter);
 app.use("/rooms", roomRouter);
+app.use("/sessions", sessionRouter);
 
 
 app.get("/", (_req, res) => {

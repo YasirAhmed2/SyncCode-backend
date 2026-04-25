@@ -4,7 +4,7 @@ export interface IUser extends Document {
   name: string;
   email: string;
   password?: string;
-  provider: "local" | "google" | "github";
+  provider: "local" | "google";
 
   // OTP-based forgot password
   otp?: string;
@@ -43,7 +43,7 @@ const UserSchema: Schema<IUser> = new Schema(
 
     provider: {
       type: String,
-      enum: ["local", "google", "github"],
+      enum: ["local", "google"],
       default: "local"
     },
 

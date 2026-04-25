@@ -8,6 +8,12 @@ import * as crypto from "crypto";
 import { sendEmail } from "../services/email.service.js";
 
 async function Signup(userData) {
+  const existingUser = await User.findOne({ email: userData.email });
+  if (existingUser) {
+    const error = new Error("Email already registered") as Error & { statusCode?: number };
+    error.statusCode = 409;
+    throw error;
+  }
 
   // const { name, email, password } = req.body;
  
@@ -99,7 +105,31 @@ export const verifyEmailOtp = async (req, res) => {
 
   await user.save();
 
-  res.json({ message: "Email verified successfully" });
+  const token = await generateToken({
+    userId: user._id.toString(),
+    name: user.name,
+    email: user.email,
+  });
+
+  const isProduction = process.env.NODE_ENV === "production";
+
+  res.cookie("auth_jwt", token, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+    path: "/"
+  });
+
+  res.json({
+    success: true,
+    message: "Email verified successfully",
+    user: {
+      userId: user._id.toString(),
+      name: user.name,
+      email: user.email,
+    },
+    token,
+  });
 };
 
 
@@ -219,11 +249,14 @@ export const verifyOtp = async (req, res) => {
   user.otpExpire = undefined;
   await user.save();
 
+  const isProduction = process.env.NODE_ENV === "production";
+
   res.cookie("auth_jwt", resetToken, {
     httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    maxAge: 10 * 60 * 1000
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+    maxAge: 10 * 60 * 1000,
+    path: "/"
   });
 
   res.json({ message: "OTP verified", resetToken });
@@ -241,13 +274,26 @@ export const resetPassword = async (req, res) => {
   user.password = await bcrypt.hash(newPassword, 10);
   await user.save();
 
-  res.clearCookie("auth_jwt");
+  const isProduction = process.env.NODE_ENV === "production";
+
+  res.clearCookie("auth_jwt", {
+    path: "/",
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax"
+  });
 
   res.json({ message: "Password reset successful" });
 };
 
 export const logoutUser = (req, res) => {
-  res.clearCookie("auth_jwt");
+  const isProduction = process.env.NODE_ENV === "production";
+
+  res.clearCookie("auth_jwt", {
+    path: "/",
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax"
+  });
+
   res.json({ msg: "Logged out successfully" });
 }
 

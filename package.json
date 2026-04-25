@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch --import tsconfig-paths/register src/index.ts",
     "build": "tsc && tsc-alias",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "loadtest:sockets": "tsx src/scripts/socketLoadTest.ts"
   },
   "keywords": [],
   "author": "Yasir Ahmed",
@@ -26,6 +27,7 @@
     "rate-limit-redis": "^4.3.1",
     "sib-api-v3-sdk": "^8.5.0",
     "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
     "tsc-alias": "^1.8.16",
     "typescript": "^5.9.3",
     "zod": "^4.1.13"

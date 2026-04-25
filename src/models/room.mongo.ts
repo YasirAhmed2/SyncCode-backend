@@ -2,10 +2,14 @@ import mongoose, { Schema, Document } from "mongoose";
 
 export interface IRoom extends Document {
   roomId: string;
+  name: string;
   createdBy: mongoose.Types.ObjectId;
+  teacherId: mongoose.Types.ObjectId;
   participants: mongoose.Types.ObjectId[];
   code: string;
   language: "javascript" | "python";
+  mode: "broadcast" | "practice";
+  isLocked: boolean;
   createdAt: Date;
 }
 
@@ -18,7 +22,20 @@ const roomSchema = new Schema<IRoom>(
       index: true,
     },
 
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 80,
+    },
+
     createdBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
+    teacherId: {
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
@@ -30,7 +47,7 @@ const roomSchema = new Schema<IRoom>(
         ref: "User",
       },
     ],
- code: {
+    code: {
       type: String,
       default: "",
     },
@@ -38,6 +55,15 @@ const roomSchema = new Schema<IRoom>(
       type: String,
       enum: ["javascript", "python"],
       default: "javascript",
+    },
+    mode: {
+      type: String,
+      enum: ["broadcast", "practice"],
+      default: "broadcast",
+    },
+    isLocked: {
+      type: Boolean,
+      default: false,
     },
   },
   {

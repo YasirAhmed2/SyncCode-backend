@@ -16,7 +16,12 @@ export const createRoom = async (req: any, res: Response) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const { language } = req.body;
+    const { language, name } = req.body;
+
+    const sanitizedName = typeof name === "string" ? name.trim() : "";
+    if (!sanitizedName) {
+      return res.status(400).json({ message: "Room name is required" });
+    }
 
     const defaultCode = language === "python"
       ? "print('Hello, World!')"
@@ -24,10 +29,14 @@ export const createRoom = async (req: any, res: Response) => {
 
     const room = await Room.create({
       roomId: generateRoomId(),
+      name: sanitizedName,
       createdBy: userId,
+      teacherId: userId,
       participants: [userId],
       language: language || "javascript",
       code: defaultCode,
+      mode: "broadcast",
+      isLocked: false,
     });
 
     res.status(201).json({
@@ -35,8 +44,13 @@ export const createRoom = async (req: any, res: Response) => {
       message: "Room created successfully",
       room: {
         roomId: room.roomId,
+        name: room.name,
         createdBy: room.createdBy,
         language: room.language,
+        code: room.code,
+        teacherId: room.teacherId,
+        mode: room.mode,
+        isLocked: room.isLocked,
       },
     });
   } catch (error) {
@@ -81,9 +95,14 @@ export const joinRoom = async (req: any, res: Response) => {
       message: "Joined room successfully",
       room: {
         roomId: room.roomId,
+        name: room.name,
+        createdBy: room.createdBy,
+        teacherId: room.teacherId,
         participantsCount: room.participants.length,
         language: room.language,
         code: room.code,
+        mode: room.mode,
+        isLocked: room.isLocked,
         participants: populatedRoom?.participants,
       },
     });
@@ -112,11 +131,15 @@ export const getRoomDetails = async (req: any, res: Response) => {
       success: true,
       data: {
         roomId: room.roomId,
+        name: room.name,
         createdBy: room.createdBy,
         participants: room.participants,
         totalParticipants: room.participants.length,
         language: room.language,
         code: room.code,
+        teacherId: room.teacherId,
+        mode: room.mode,
+        isLocked: room.isLocked,
       },
     });
   } catch (error) {
@@ -226,7 +249,7 @@ export const getMyRooms = async (req: any, res: Response) => {
       ],
     })
       .sort({ updatedAt: -1 })
-      .select("roomId language updatedAt");
+      .select("roomId name language updatedAt");
 
     res.status(200).json({
       success: true,

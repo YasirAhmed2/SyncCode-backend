@@ -10,7 +10,13 @@ export const authenticate = (
   res: Response,
   next: NextFunction
 ) => {
-  const token = req.cookies["auth_jwt"];
+  const cookieToken = req.cookies["auth_jwt"];
+  const authHeader = req.headers.authorization;
+  const bearerToken = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : undefined;
+
+  const token = cookieToken || bearerToken;
 
   console.log("Received token:", token);
 
