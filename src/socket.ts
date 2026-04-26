@@ -3,8 +3,9 @@ import Room from './models/room.mongo.js';
 import { Server as HttpServer } from 'http';
 import * as RecordingService from './services/recording.service.js';
 
-// Store timeouts for debounced saving
-const timeouts: Record<string, NodeJS.Timeout> = {};
+const AUTO_SAVE_INTERVAL_MS = 60_000;
+const autoSaveTimers: Record<string, NodeJS.Timeout> = {};
+const pendingAutoSaves: Record<string, { code: string; language: string }> = {};
 
 // Track active users in each room
 const activeUsers: Record<string, Map<string, { userId: string; userName: string; socketId: string; avatarColor: string }>> = {};
@@ -51,10 +52,16 @@ const clearRoomState = (roomId: string) => {
     delete roomControlState[roomId];
     delete pendingCodeBroadcasts[roomId];
     delete roomActivity[roomId];
+    delete pendingAutoSaves[roomId];
 
     if (codeBroadcastTimers[roomId]) {
         clearTimeout(codeBroadcastTimers[roomId]);
         delete codeBroadcastTimers[roomId];
+    }
+
+    if (autoSaveTimers[roomId]) {
+        clearTimeout(autoSaveTimers[roomId]);
+        delete autoSaveTimers[roomId];
     }
 
     if (roomActivityTimers[roomId]) {
@@ -221,6 +228,39 @@ const queueCodeBroadcast = (
             timestamp: new Date()
         });
     }, 35);
+};
+
+const scheduleRoomAutoSave = (roomId: string) => {
+    if (autoSaveTimers[roomId]) {
+        return;
+    }
+
+    autoSaveTimers[roomId] = setTimeout(async () => {
+        delete autoSaveTimers[roomId];
+
+        const latest = pendingAutoSaves[roomId];
+        if (!latest) {
+            return;
+        }
+
+        delete pendingAutoSaves[roomId];
+
+        try {
+            await Room.findOneAndUpdate(
+                { roomId },
+                { code: latest.code, language: latest.language, updatedAt: new Date() }
+            );
+            console.log(`Auto-saved code for room ${roomId} (60s interval)`);
+        } catch (err) {
+            console.error('Auto-save failed:', err);
+            // Retry the latest payload on the next interval.
+            pendingAutoSaves[roomId] = latest;
+        }
+
+        if (pendingAutoSaves[roomId]) {
+            scheduleRoomAutoSave(roomId);
+        }
+    }, AUTO_SAVE_INTERVAL_MS);
 };
 
 const getRoomForTeacherAction = async (roomId: string, userId: string) => {
@@ -396,6 +436,9 @@ const initSocket = (server: HttpServer) => {
                 return;
             }
 
+            const actorUserId = membership.userId;
+            const actorUserName = membership.userName || userName || userId || 'Unknown';
+
             const controlState = await getOrLoadRoomControlState(roomId);
             if (!controlState) {
                 return;
@@ -411,29 +454,15 @@ const initSocket = (server: HttpServer) => {
             // Coalesce bursty typing into lightweight room broadcasts.
             queueCodeBroadcast(io, roomId, {
                 code,
-                changedBy: { userId, userName },
+                changedBy: { userId: actorUserId, userName: actorUserName },
             });
 
-            // Debounce database save (2 seconds)
-            if (timeouts[roomId]) {
-                clearTimeout(timeouts[roomId]);
-            }
-
-            timeouts[roomId] = setTimeout(async () => {
-                try {
-                    await Room.findOneAndUpdate(
-                        { roomId },
-                        { code, language, updatedAt: new Date() }
-                    );
-                    console.log(`Auto-saved code for room ${roomId}`);
-                    delete timeouts[roomId];
-                } catch (err) {
-                    console.error('Auto-save failed:', err);
-                }
-            }, 2000);
+            // Persist code only on explicit Save or periodic autosave cadence.
+            pendingAutoSaves[roomId] = { code, language };
+            scheduleRoomAutoSave(roomId);
 
             // 🎬 Record code snapshot (fire-and-forget, throttled inside service).
-            void RecordingService.addSnapshot(roomId, userId, code);
+            void RecordingService.addSnapshot(roomId, actorUserId, code, actorUserName);
         });
 
         socket.on('language-change', async ({ roomId, language, userId, userName }) => {

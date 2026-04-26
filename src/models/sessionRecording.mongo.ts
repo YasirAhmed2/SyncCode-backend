@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ISessionEvent {
   userId: string;
+  userName?: string;
   code: string;
   timestamp: number; // ms since epoch
 }
@@ -33,6 +34,7 @@ export interface ISessionRecording extends Document {
 const sessionEventSchema = new Schema<ISessionEvent>(
   {
     userId: { type: String, required: true },
+    userName: { type: String, default: 'Unknown' },
     code: { type: String, required: true },
     timestamp: { type: Number, required: true },
   },

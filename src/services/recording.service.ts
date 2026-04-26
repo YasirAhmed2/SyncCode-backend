@@ -9,11 +9,7 @@
 import SessionRecording, { ISessionEvent } from '../models/sessionRecording.mongo.js';
 import User from '../models/user.mongo.js';
 
-const MAX_EVENTS_PER_SESSION = 500;
-const SNAPSHOT_THROTTLE_MS = 3000; // 1 snapshot per user per 3 seconds
-
-// In-memory throttle: `roomId:userId` → last saved timestamp
-const snapshotThrottle = new Map<string, number>();
+const MAX_EVENTS_PER_SESSION = 12000;
 
 // Track which rooms have an active recording (in-memory, not persisted)
 const activeRecordings = new Map<string, string>(); // roomId → sessionRecording _id (string)
@@ -56,22 +52,30 @@ export async function startRecording(roomId: string): Promise<void> {
 export async function addSnapshot(
   roomId: string,
   userId: string,
-  code: string
+  code: string,
+  userName?: string
 ): Promise<void> {
   try {
-    const throttleKey = `${roomId}:${userId}`;
     const now = Date.now();
-    const lastSaved = snapshotThrottle.get(throttleKey) ?? 0;
+    let sessionId = activeRecordings.get(roomId);
 
-    // Throttle: skip if less than SNAPSHOT_THROTTLE_MS since last save.
-    if (now - lastSaved < SNAPSHOT_THROTTLE_MS) return;
+    if (!sessionId) {
+      const existing = await SessionRecording.findOne({
+        roomId,
+        endedAt: null,
+      }).select('_id');
 
-    const sessionId = activeRecordings.get(roomId);
-    if (!sessionId) return;
+      if (!existing) return;
+      sessionId = existing._id.toString();
+      activeRecordings.set(roomId, sessionId);
+    }
 
-    snapshotThrottle.set(throttleKey, now);
-
-    const event: ISessionEvent = { userId, code, timestamp: now };
+    const event: ISessionEvent = {
+      userId,
+      userName: userName?.trim() || 'Unknown',
+      code,
+      timestamp: now,
+    };
 
     await SessionRecording.findByIdAndUpdate(sessionId, {
       $push: {
@@ -95,13 +99,6 @@ export async function stopRecording(roomId: string): Promise<void> {
 
     // Remove from active map immediately so no more snapshots land.
     activeRecordings.delete(roomId);
-
-    // Clean up throttle entries for this room.
-    for (const key of snapshotThrottle.keys()) {
-      if (key.startsWith(`${roomId}:`)) {
-        snapshotThrottle.delete(key);
-      }
-    }
 
     const session = await SessionRecording.findById(sessionId);
     if (!session) return;
@@ -188,11 +185,6 @@ export async function computeAnalytics(
 }
 
 // ─── GETTERS (used by REST controllers) ──────────────────────────────────────
-
-export async function getLatestRecording(roomId: string) {
-  return SessionRecording.findOne({ roomId }).sort({ startedAt: -1 });
-}
-
 export async function getLatestReport(roomId: string) {
   // First try to find a completed session with analytics
   const completed = await SessionRecording.findOne({ roomId, endedAt: { $ne: null } })
