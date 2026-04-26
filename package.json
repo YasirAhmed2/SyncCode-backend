@@ -30,6 +30,8 @@
     "socket.io-client": "^4.8.3",
     "tsc-alias": "^1.8.16",
     "typescript": "^5.9.3",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.27",
     "zod": "^4.1.13"
   },
   "devDependencies": {

@@ -151,7 +151,7 @@ export const getRoomDetails = async (req: any, res: Response) => {
 export const saveRoomCode = async (req: any, res: Response) => {
   try {
     const { roomId } = req.params;
-    const { code, language } = req.body;
+    const { code, language, yjsState } = req.body;
     const userId = req.user?.userId;
 
     if (!code && !language) { // Allow saving just one or the other, or both.
@@ -188,6 +188,9 @@ export const saveRoomCode = async (req: any, res: Response) => {
 
     room.code = code;
     room.language = language;
+    if (typeof yjsState === "string" && yjsState.length > 0) {
+      room.yjsState = yjsState;
+    }
 
     await room.save();
 

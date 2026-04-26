@@ -7,6 +7,7 @@ export interface IRoom extends Document {
   teacherId: mongoose.Types.ObjectId;
   participants: mongoose.Types.ObjectId[];
   code: string;
+  yjsState?: string;
   language: "javascript" | "python";
   mode: "broadcast" | "practice";
   isLocked: boolean;
@@ -50,6 +51,10 @@ const roomSchema = new Schema<IRoom>(
     code: {
       type: String,
       default: "",
+    },
+    yjsState: {
+      type: String,
+      default: null,
     },
     language: {
       type: String,

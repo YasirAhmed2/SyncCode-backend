@@ -2,10 +2,12 @@ import { Server } from 'socket.io';
 import Room from './models/room.mongo.js';
 import { Server as HttpServer } from 'http';
 import * as RecordingService from './services/recording.service.js';
+import * as Y from 'yjs';
+import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness';
 
 const AUTO_SAVE_INTERVAL_MS = 60_000;
 const autoSaveTimers: Record<string, NodeJS.Timeout> = {};
-const pendingAutoSaves: Record<string, { code: string; language: string }> = {};
+const pendingAutoSaves: Record<string, { code: string; language: string; yjsState?: string }> = {};
 
 // Track active users in each room
 const activeUsers: Record<string, Map<string, { userId: string; userName: string; socketId: string; avatarColor: string }>> = {};
@@ -44,19 +46,58 @@ type RoomControlState = {
 };
 
 const roomControlState: Record<string, RoomControlState> = {};
-const pendingCodeBroadcasts: Record<string, { code: string; changedBy: { userId: string; userName: string } }> = {};
-const codeBroadcastTimers: Record<string, NodeJS.Timeout> = {};
+const roomYDocs: Record<string, Y.Doc> = {};
+const roomAwareness: Record<string, Awareness> = {};
+
+const CODE_FIELD = 'code';
+
+const normalizeBinary = (payload: unknown): Uint8Array => {
+    if (!payload) return new Uint8Array();
+    if (payload instanceof Uint8Array) return payload;
+    if (payload instanceof ArrayBuffer) return new Uint8Array(payload);
+
+    // Socket.IO on Node often delivers Buffers.
+    if (Buffer.isBuffer(payload)) {
+        return new Uint8Array(payload);
+    }
+
+    // May arrive as number[]
+    if (Array.isArray(payload)) {
+        return new Uint8Array(payload);
+    }
+
+    // May arrive as { type: 'Buffer', data: number[] }
+    const maybe = payload as any;
+    if (maybe?.type === 'Buffer' && Array.isArray(maybe?.data)) {
+        return new Uint8Array(maybe.data);
+    }
+
+    // May arrive as { buffer: ArrayBuffer, byteOffset, byteLength }-ish
+    if (maybe?.buffer instanceof ArrayBuffer) {
+        try {
+            return new Uint8Array(maybe.buffer, maybe.byteOffset ?? 0, maybe.byteLength ?? undefined);
+        } catch {
+            return new Uint8Array();
+        }
+    }
+
+    return new Uint8Array();
+};
 
 const clearRoomState = (roomId: string) => {
     delete activeUsers[roomId];
     delete roomControlState[roomId];
-    delete pendingCodeBroadcasts[roomId];
     delete roomActivity[roomId];
     delete pendingAutoSaves[roomId];
 
-    if (codeBroadcastTimers[roomId]) {
-        clearTimeout(codeBroadcastTimers[roomId]);
-        delete codeBroadcastTimers[roomId];
+    if (roomAwareness[roomId]) {
+        roomAwareness[roomId].destroy();
+        delete roomAwareness[roomId];
+    }
+
+    if (roomYDocs[roomId]) {
+        roomYDocs[roomId].destroy();
+        delete roomYDocs[roomId];
     }
 
     if (autoSaveTimers[roomId]) {
@@ -202,32 +243,57 @@ const getOrLoadRoomControlState = async (roomId: string): Promise<RoomControlSta
     return state;
 };
 
-const queueCodeBroadcast = (
-    io: Server,
-    roomId: string,
-    payload: { code: string; changedBy: { userId: string; userName: string } }
-) => {
-    pendingCodeBroadcasts[roomId] = payload;
+const encodeUpdateToBase64 = (update: Uint8Array): string => Buffer.from(update).toString('base64');
 
-    if (codeBroadcastTimers[roomId]) {
-        return;
+const decodeBase64ToUpdate = (maybeBase64: unknown): Uint8Array => {
+    if (typeof maybeBase64 !== 'string' || maybeBase64.length === 0) {
+        return new Uint8Array();
+    }
+    try {
+        return new Uint8Array(Buffer.from(maybeBase64, 'base64'));
+    } catch {
+        return new Uint8Array();
+    }
+};
+
+const getOrLoadRoomYjs = async (roomId: string): Promise<{ ydoc: Y.Doc; awareness: Awareness; language: string }> => {
+    if (roomYDocs[roomId] && roomAwareness[roomId]) {
+        const room = await Room.findOne({ roomId }).select('language');
+        return { ydoc: roomYDocs[roomId], awareness: roomAwareness[roomId], language: room?.language || 'javascript' };
     }
 
-    codeBroadcastTimers[roomId] = setTimeout(() => {
-        const latest = pendingCodeBroadcasts[roomId];
-        delete pendingCodeBroadcasts[roomId];
-        delete codeBroadcastTimers[roomId];
+    const room = await Room.findOne({ roomId }).select('code language yjsState');
+    const ydoc = new Y.Doc();
+    const text = ydoc.getText(CODE_FIELD);
+    const awareness = new Awareness(ydoc);
 
-        if (!latest) {
-            return;
+    if (room?.yjsState) {
+        const update = decodeBase64ToUpdate(room.yjsState);
+        if (update.length) {
+            Y.applyUpdate(ydoc, update, 'db-init');
         }
+    } else if (typeof room?.code === 'string' && room.code.length) {
+        text.insert(0, room.code);
+    }
 
-        io.to(roomId).emit('code-update', {
-            code: latest.code,
-            changedBy: latest.changedBy,
-            timestamp: new Date()
-        });
-    }, 35);
+    roomYDocs[roomId] = ydoc;
+    roomAwareness[roomId] = awareness;
+
+    return { ydoc, awareness, language: room?.language || 'javascript' };
+};
+
+const encodeRoomSnapshot = (roomId: string) => {
+    const ydoc = roomYDocs[roomId];
+    const awareness = roomAwareness[roomId];
+    if (!ydoc || !awareness) {
+        return { documentUpdate: new Uint8Array(), awarenessUpdate: new Uint8Array() };
+    }
+
+    const documentUpdate = Y.encodeStateAsUpdate(ydoc);
+    const clientIds = Array.from(awareness.getStates().keys());
+    const awarenessUpdate = clientIds.length ? encodeAwarenessUpdate(awareness, clientIds) : new Uint8Array();
+
+    return { documentUpdate, awarenessUpdate };
 };
 
 const scheduleRoomAutoSave = (roomId: string) => {
@@ -248,7 +314,7 @@ const scheduleRoomAutoSave = (roomId: string) => {
         try {
             await Room.findOneAndUpdate(
                 { roomId },
-                { code: latest.code, language: latest.language, updatedAt: new Date() }
+                { code: latest.code, language: latest.language, yjsState: latest.yjsState, updatedAt: new Date() }
             );
             console.log(`Auto-saved code for room ${roomId} (60s interval)`);
         } catch (err) {
@@ -362,6 +428,15 @@ const initSocket = (server: HttpServer) => {
             // Send latest chat history to the newly joined user.
             socket.emit('room-chat-history', { messages: roomChatHistory[roomId] || [] });
 
+            // --- Yjs initial sync (CRDT snapshot + awareness) ---
+            try {
+                await getOrLoadRoomYjs(roomId);
+                const snapshot = encodeRoomSnapshot(roomId);
+                socket.emit('yjs-init', snapshot);
+            } catch (err) {
+                console.error('Failed to init Yjs for room', roomId, err);
+            }
+
             // 🎬 Start recording when first user joins (fire-and-forget).
             void RecordingService.startRecording(roomId);
         });
@@ -448,14 +523,11 @@ const initSocket = (server: HttpServer) => {
             }
         });
 
-        socket.on('code-change', async ({ roomId, code, language, userId, userName }) => {
+        socket.on('yjs-update', async ({ roomId, update }: { roomId: string; update: Uint8Array }) => {
             const membership = socketRoomMembership[socket.id];
             if (!membership || membership.roomId !== roomId) {
                 return;
             }
-
-            const actorUserId = membership.userId;
-            const actorUserName = membership.userName || userName || userId || 'Unknown';
 
             const controlState = await getOrLoadRoomControlState(roomId);
             if (!controlState) {
@@ -463,24 +535,50 @@ const initSocket = (server: HttpServer) => {
             }
 
             const isTeacher = controlState.teacherId === membership.userId;
-            const blockStudentEdit = controlState.isLocked;
+            const blockStudentEdit = controlState.isLocked || controlState.mode === 'broadcast';
 
             if (!isTeacher && blockStudentEdit) {
+                // Reject and re-snapshot the current doc to keep clients converged.
+                await getOrLoadRoomYjs(roomId);
+                socket.emit('yjs-init', encodeRoomSnapshot(roomId));
                 return;
             }
 
-            // Coalesce bursty typing into lightweight room broadcasts.
-            queueCodeBroadcast(io, roomId, {
-                code,
-                changedBy: { userId: actorUserId, userName: actorUserName },
-            });
+            const { ydoc, language } = await getOrLoadRoomYjs(roomId);
+            const normalized = normalizeBinary(update);
+            if (!normalized.length) return;
 
-            // Persist code only on explicit Save or periodic autosave cadence.
-            pendingAutoSaves[roomId] = { code, language };
+            Y.applyUpdate(ydoc, normalized, 'socket-remote');
+            socket.to(roomId).emit('yjs-update', normalized);
+
+            const plainCode = ydoc.getText(CODE_FIELD).toString();
+            pendingAutoSaves[roomId] = {
+                code: plainCode,
+                language,
+                yjsState: encodeUpdateToBase64(Y.encodeStateAsUpdate(ydoc)),
+            };
             scheduleRoomAutoSave(roomId);
 
-            // 🎬 Record code snapshot (fire-and-forget, throttled inside service).
-            void RecordingService.addSnapshot(roomId, actorUserId, code, actorUserName);
+            const actorUserId = membership.userId;
+            const actorUserName = membership.userName || 'Unknown';
+            void RecordingService.addSnapshot(roomId, actorUserId, plainCode, actorUserName);
+        });
+
+        socket.on('yjs-awareness', async ({ roomId, update, clientId }: { roomId: string; update: Uint8Array; clientId?: number }) => {
+            const membership = socketRoomMembership[socket.id];
+            if (!membership || membership.roomId !== roomId) {
+                return;
+            }
+
+            await getOrLoadRoomYjs(roomId);
+            const awareness = roomAwareness[roomId];
+            if (!awareness) return;
+
+            const normalized = normalizeBinary(update);
+            if (!normalized.length) return;
+
+            applyAwarenessUpdate(awareness, normalized, clientId ?? 'socket-remote');
+            socket.to(roomId).emit('yjs-awareness', normalized);
         });
 
         socket.on('language-change', async ({ roomId, language, userId, userName }) => {
@@ -649,17 +747,22 @@ const initSocket = (server: HttpServer) => {
                 return;
             }
 
-            await Room.findOneAndUpdate(
-                { roomId },
-                { code, updatedAt: new Date() }
-            );
+            const { ydoc, language } = await getOrLoadRoomYjs(roomId);
+            const text = ydoc.getText(CODE_FIELD);
+            ydoc.transact(() => {
+                text.delete(0, text.length);
+                text.insert(0, code);
+            }, 'teacher-broadcast');
 
-            io.to(roomId).emit('code-update', {
+            const update = Y.encodeStateAsUpdate(ydoc);
+            io.to(roomId).emit('yjs-update', update);
+
+            pendingAutoSaves[roomId] = {
                 code,
-                changedBy: { userId: membership.userId, userName: membership.userName },
-                timestamp: new Date(),
-                isBroadcast: true,
-            });
+                language,
+                yjsState: encodeUpdateToBase64(update),
+            };
+            scheduleRoomAutoSave(roomId);
         });
 
         socket.on('cursor-change', ({ roomId, cursorData }) => {

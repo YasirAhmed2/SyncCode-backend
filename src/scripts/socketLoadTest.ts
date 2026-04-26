@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { io, Socket } from 'socket.io-client';
+import * as Y from 'yjs';
 
 type CliOptions = {
   serverUrl: string;
@@ -100,7 +101,7 @@ const ensureRoomId = async (options: CliOptions): Promise<string> => {
   const createRoomUrl = `${options.serverUrl.replace(/\/$/, '')}/rooms/create`;
   const response = await axios.post(
     createRoomUrl,
-    { language: options.language },
+    { language: options.language, name: `Load Test ${Date.now()}` },
     {
       headers: {
         Authorization: `Bearer ${options.token}`,
@@ -167,6 +168,7 @@ const main = async () => {
   const latencies: number[] = [];
   const sentAtBySeq = new Map<number, number>();
   const seenBySeqAndClient = new Set<string>();
+  const docs = new Map<number, Y.Doc>();
 
   try {
     for (let i = 0; i < options.clients; i += 1) {
@@ -178,8 +180,22 @@ const main = async () => {
     await sleep(800);
 
     sockets.forEach((socket, clientIdx) => {
-      socket.on('code-update', (payload: any) => {
-        const code = String(payload?.code || '');
+      const doc = new Y.Doc();
+      const text = doc.getText('code');
+      docs.set(clientIdx, doc);
+
+      socket.on('yjs-init', (payload: any) => {
+        if (payload?.documentUpdate) {
+          Y.applyUpdate(doc, payload.documentUpdate);
+        }
+      });
+
+      socket.on('yjs-update', (payload: any) => {
+        if (payload) {
+          Y.applyUpdate(doc, payload);
+        }
+
+        const code = text.toString();
         const seqMatch = code.match(/\/\*load-seq:(\d+)\*\//);
         if (!seqMatch) return;
 
@@ -202,12 +218,17 @@ const main = async () => {
       const code = `/*load-seq:${seq}*/\nconsole.log('seq:${seq} at ${Date.now()}');`;
       sentAtBySeq.set(seq, Date.now());
 
-      sender.emit('code-change', {
+      const senderDoc = docs.get(0);
+      if (!senderDoc) {
+        throw new Error('sender doc not initialized');
+      }
+
+      const senderText = senderDoc.getText('code');
+      senderText.delete(0, senderText.length);
+      senderText.insert(0, code);
+      sender.emit('yjs-update', {
         roomId,
-        code,
-        language: options.language,
-        userId: senderUserId,
-        userName: 'LoadUser0',
+        update: Y.encodeStateAsUpdate(senderDoc),
       });
 
       await sleep(options.intervalMs);
