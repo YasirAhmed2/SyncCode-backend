@@ -273,10 +273,28 @@ const getRoomForTeacherAction = async (roomId: string, userId: string) => {
 };
 
 const initSocket = (server: HttpServer) => {
+    const allowedOrigins = new Set([
+        'https://www.synccode.dev',
+        'https://synccode.dev',
+        'http://www.synccode.dev',
+        'http://synccode.dev',
+        'http://localhost:8080',
+        'http://localhost:5173',
+        'http://localhost:3000',
+    ]);
+
+    const allowedOriginPattern = /^https?:\/\/([a-z0-9-]+\.)?synccode\.dev$/i;
+
     const io = new Server(server, {
         cors: {
-            // Allow both frontend ports and localhost
-            origin: ["https://www.synccode.dev", "https://synccode.dev", "http://localhost:8080", "http://localhost:5173", "http://localhost:3000"],
+            origin: (origin, callback) => {
+                if (!origin || allowedOrigins.has(origin) || allowedOriginPattern.test(origin)) {
+                    callback(null, true);
+                    return;
+                }
+
+                callback(new Error('Not allowed by CORS'));
+            },
             methods: ['GET', 'POST'],
             credentials: true,
         },

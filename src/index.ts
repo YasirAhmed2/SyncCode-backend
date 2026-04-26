@@ -22,6 +22,8 @@ app.set("trust proxy", 1);
 const defaultAllowedOrigins = [
   "https://www.synccode.dev",
   "https://synccode.dev",
+  "http://www.synccode.dev",
+  "http://synccode.dev",
   "http://localhost:5173",
   "http://localhost:3000",
   "http://localhost:8080",
@@ -37,9 +39,9 @@ const allowedOriginSet = new Set([...defaultAllowedOrigins, ...envAllowedOrigins
 
 const allowedOriginPatterns = [
   /^https?:\/\/localhost(?::\d+)?$/i,
-  /^https:\/\/([a-z0-9-]+\.)?synccode\.dev$/i,
+  /^https?:\/\/([a-z0-9-]+\.)?synccode\.dev$/i,
   /^https:\/\/[a-z0-9-]+\.vercel\.app$/i,
-  /^https:\/\/[a-z0-9-]+\.netlify\.app$/i
+  /^https:\/\/[a-z0-9-]+\.netlify\.app$/i,
 ];
 
 const isAllowedOrigin = (origin: string) => {
