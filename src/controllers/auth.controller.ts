@@ -5,7 +5,7 @@ import { generateToken } from "../utils/jwt.utils.js";
 
 import * as crypto from "crypto";
 
-import { sendEmail } from "../services/email.service.js";
+import { sendOtpEmail, sendWelcomeEmail } from "../services/email.service.js";
 
 async function Signup(userData) {
   const existingUser = await User.findOne({ email: userData.email });
@@ -48,16 +48,7 @@ async function Signup(userData) {
   // await user.save();
 
 
-  await sendEmail(
-    user.email,
-    "Verify Your SyncCode Account",
-    `
-      <h2>Email Verification</h2>
-      <p>Your verification OTP is:</p>
-      <h1>${otp}</h1>
-      <p>This OTP will expire in 5 minutes.</p>
-    `
-  );
+  await sendOtpEmail(user.email, otp, "email-verification");
 
 
   const signedData = await generateToken({
@@ -104,6 +95,13 @@ export const verifyEmailOtp = async (req, res) => {
   user.otpExpire = undefined;
 
   await user.save();
+
+  try {
+    await sendWelcomeEmail(user.email, user.name || "there");
+  } catch (emailError) {
+    // Keep verification successful even if welcome email fails.
+    console.error("Failed to send welcome email:", emailError);
+  }
 
   const token = await generateToken({
     userId: user._id.toString(),
@@ -207,16 +205,7 @@ export const sendOtp = async (req, res) => {
 
   await user.save();
 
-  await sendEmail(
-    user.email,
-    "SyncCode Password Reset OTP",
-    `
-      <h2>Password Reset OTP</h2>
-      <p>Your OTP is:</p>
-      <h1>${otp}</h1>
-      <p>This OTP will expire in 5 minutes.</p>
-    `
-  );
+  await sendOtpEmail(user.email, otp, "password-reset");
 
   res.json({ message: "OTP sent to email" });
 };
