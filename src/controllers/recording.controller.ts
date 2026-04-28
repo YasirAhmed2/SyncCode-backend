@@ -37,7 +37,8 @@ export const getReport = async (req: any, res: Response) => {
       analytics = await RecordingService.computeAnalytics(
         report.events,
         report.startedAt,
-        endTime
+        endTime,
+        room.teacherId?.toString()
       );
     }
 
@@ -48,10 +49,37 @@ export const getReport = async (req: any, res: Response) => {
       });
     }
 
+    const teacherId = room.teacherId?.toString();
+    const teacherExcludedStats = (analytics.userStats || []).filter(
+      (stat: any) => stat.userId !== teacherId
+    );
+    const maxActivity = Math.max(...teacherExcludedStats.map((s: any) => s.activityCount), 1);
+    const engagementScores = teacherExcludedStats.map((s: any) =>
+      Math.round((s.activityCount / maxActivity) * 100)
+    );
+    const avgEngagement =
+      engagementScores.length > 0
+        ? Math.round(engagementScores.reduce((a: number, b: number) => a + b, 0) / engagementScores.length)
+        : 0;
+    const sortedStats = [...teacherExcludedStats].sort((a, b) => b.activityCount - a.activityCount);
+    const normalizedAnalytics = {
+      ...analytics,
+      totalUsers: teacherExcludedStats.length,
+      mostActiveUser: sortedStats[0]?.userName || '',
+      leastActiveUser: sortedStats[sortedStats.length - 1]?.userName || '',
+      avgEngagement,
+      userStats: teacherExcludedStats,
+    };
+
     // Students only see their own stat
     const filteredUserStats = isTeacher
-      ? analytics.userStats
-      : analytics.userStats.filter((s) => s.userId === userId);
+      ? normalizedAnalytics.userStats
+      : normalizedAnalytics.userStats.filter((s) => s.userId === userId);
+
+    const allSubmissions = await RecordingService.getPracticeSubmissions(roomId);
+    const practiceSubmissions = isTeacher
+      ? allSubmissions
+      : allSubmissions.filter((entry: any) => entry.studentId === userId);
 
     const endTime = report.endedAt || new Date();
     const sessionDurationMs = endTime.getTime() - report.startedAt.getTime();
@@ -67,12 +95,13 @@ export const getReport = async (req: any, res: Response) => {
         sessionDurationMs,
         isTeacher,
         analytics: {
-          totalUsers: isTeacher ? analytics.totalUsers : 1,
-          mostActiveUser: isTeacher ? analytics.mostActiveUser : undefined,
-          leastActiveUser: isTeacher ? analytics.leastActiveUser : undefined,
-          avgEngagement: isTeacher ? analytics.avgEngagement : undefined,
+          totalUsers: isTeacher ? normalizedAnalytics.totalUsers : 1,
+          mostActiveUser: isTeacher ? normalizedAnalytics.mostActiveUser : undefined,
+          leastActiveUser: isTeacher ? normalizedAnalytics.leastActiveUser : undefined,
+          avgEngagement: isTeacher ? normalizedAnalytics.avgEngagement : undefined,
           userStats: filteredUserStats,
         },
+        practiceSubmissions,
       },
     });
   } catch (err) {

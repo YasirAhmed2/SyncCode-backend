@@ -153,9 +153,9 @@ const ensureRoomActivityTicker = (io: Server, roomId: string) => {
         }
 
         const teacherSocketId = getTeacherSocketId(roomId);
+        // Teacher may not be connected yet (or room control state may load after join).
+        // Keep the ticker alive so statuses are ready to emit as soon as the teacher appears.
         if (!teacherSocketId) {
-            clearInterval(roomActivityTimers[roomId]);
-            delete roomActivityTimers[roomId];
             return;
         }
 
@@ -424,6 +424,7 @@ const initSocket = (server: HttpServer) => {
             }
 
             syncRoomActivityForTeacher(io, roomId);
+            ensureRoomActivityTicker(io, roomId);
 
             // Send latest chat history to the newly joined user.
             socket.emit('room-chat-history', { messages: roomChatHistory[roomId] || [] });
@@ -535,7 +536,7 @@ const initSocket = (server: HttpServer) => {
             }
 
             const isTeacher = controlState.teacherId === membership.userId;
-            const blockStudentEdit = controlState.isLocked || controlState.mode === 'broadcast';
+            const blockStudentEdit = controlState.mode === 'broadcast';
 
             if (!isTeacher && blockStudentEdit) {
                 // Reject and re-snapshot the current doc to keep clients converged.
@@ -562,6 +563,37 @@ const initSocket = (server: HttpServer) => {
             const actorUserId = membership.userId;
             const actorUserName = membership.userName || 'Unknown';
             void RecordingService.addSnapshot(roomId, actorUserId, plainCode, actorUserName);
+        });
+
+        socket.on('practice-submission-update', async ({ roomId, code, language }) => {
+            if (!roomId || typeof code !== 'string') {
+                return;
+            }
+
+            const membership = socketRoomMembership[socket.id];
+            if (!membership || membership.roomId !== roomId) {
+                return;
+            }
+
+            const controlState = await getOrLoadRoomControlState(roomId);
+            if (!controlState || controlState.mode !== 'practice') {
+                return;
+            }
+
+            const isTeacher = controlState.teacherId === membership.userId;
+            if (isTeacher) {
+                return;
+            }
+
+            const normalizedLanguage: 'javascript' | 'python' = language === 'python' ? 'python' : 'javascript';
+
+            void RecordingService.upsertPracticeSubmission({
+                roomId,
+                studentId: membership.userId,
+                studentName: membership.userName || 'Unknown',
+                code,
+                language: normalizedLanguage,
+            });
         });
 
         socket.on('yjs-awareness', async ({ roomId, update, clientId }: { roomId: string; update: Uint8Array; clientId?: number }) => {
@@ -613,10 +645,8 @@ const initSocket = (server: HttpServer) => {
             }
 
             room.mode = mode;
-            // Practice mode always unlocks editor for collaborative editing.
-            if (mode === 'practice') {
-                room.isLocked = false;
-            }
+            // Keep lock state aligned with selected classroom mode.
+            room.isLocked = mode === 'broadcast';
             await room.save();
 
             roomControlState[roomId] = {

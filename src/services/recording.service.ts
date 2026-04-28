@@ -7,6 +7,8 @@
  */
 
 import SessionRecording, { ISessionEvent } from '../models/sessionRecording.mongo.js';
+import PracticeSubmission from '../models/practiceSubmission.mongo.js';
+import Room from '../models/room.mongo.js';
 import User from '../models/user.mongo.js';
 
 const MAX_EVENTS_PER_SESSION = 12000;
@@ -103,8 +105,16 @@ export async function stopRecording(roomId: string): Promise<void> {
     const session = await SessionRecording.findById(sessionId);
     if (!session) return;
 
+    const room = await Room.findOne({ roomId }).select('teacherId');
+    const teacherId = room?.teacherId?.toString();
+
     session.endedAt = new Date();
-    session.analytics = await computeAnalytics(session.events, session.startedAt, session.endedAt);
+    session.analytics = await computeAnalytics(
+      session.events,
+      session.startedAt,
+      session.endedAt,
+      teacherId
+    );
     await session.save();
 
     console.log(`[Recording] Stopped session for room ${roomId}`);
@@ -118,7 +128,8 @@ export async function stopRecording(roomId: string): Promise<void> {
 export async function computeAnalytics(
   events: ISessionEvent[],
   startedAt: Date,
-  endedAt: Date
+  endedAt: Date,
+  teacherId?: string
 ) {
   const totalDurationMs = endedAt.getTime() - startedAt.getTime();
 
@@ -130,7 +141,7 @@ export async function computeAnalytics(
     byUser.set(evt.userId, arr);
   }
 
-  const userIds = Array.from(byUser.keys());
+  const userIds = Array.from(byUser.keys()).filter((id) => id !== teacherId);
 
   // Resolve user names once
   const users = await User.find({ _id: { $in: userIds } }).select('_id name');
@@ -197,4 +208,34 @@ export async function getLatestReport(roomId: string) {
   return SessionRecording.findOne({ roomId })
     .sort({ startedAt: -1 })
     .select('roomId startedAt endedAt analytics events');
+}
+
+// ─── PRACTICE SUBMISSIONS ───────────────────────────────────────────────────
+export async function upsertPracticeSubmission(params: {
+  roomId: string;
+  studentId: string;
+  studentName?: string;
+  code: string;
+  language: 'javascript' | 'python';
+}): Promise<void> {
+  const { roomId, studentId, studentName, code, language } = params;
+
+  await PracticeSubmission.findOneAndUpdate(
+    { roomId, studentId },
+    {
+      roomId,
+      studentId,
+      studentName: studentName?.trim() || 'Unknown',
+      code,
+      language,
+      updatedAt: new Date(),
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+}
+
+export async function getPracticeSubmissions(roomId: string) {
+  return PracticeSubmission.find({ roomId })
+    .sort({ updatedAt: -1 })
+    .select('studentId studentName code language updatedAt');
 }
