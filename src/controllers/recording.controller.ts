@@ -12,7 +12,7 @@ export const getReport = async (req: any, res: Response) => {
 
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
-    const room = await Room.findOne({ roomId }).select('participants teacherId name');
+    const room = await Room.findOne({ roomId }).select('participants teacherId name practiceCodeBaseline');
     if (!room) return res.status(404).json({ message: 'Room not found' });
 
     const isParticipant = room.participants.some(
@@ -77,9 +77,30 @@ export const getReport = async (req: any, res: Response) => {
       : normalizedAnalytics.userStats.filter((s) => s.userId === userId);
 
     const allSubmissions = await RecordingService.getPracticeSubmissions(roomId);
-    const practiceSubmissions = isTeacher
+    const rawSubmissions = isTeacher
       ? allSubmissions
       : allSubmissions.filter((entry: any) => entry.studentId === userId);
+
+    const baseline =
+      typeof room.practiceCodeBaseline === 'string' ? room.practiceCodeBaseline : '';
+
+    const stripPracticeBaseline = (submitted: string): string => {
+      const s = typeof submitted === 'string' ? submitted : '';
+      if (!baseline) return s;
+      if (s.startsWith(baseline)) return s.slice(baseline.length);
+      let i = 0;
+      const n = Math.min(s.length, baseline.length);
+      while (i < n && s[i] === baseline[i]) i += 1;
+      return s.slice(i);
+    };
+
+    const practiceSubmissions = rawSubmissions.map((entry: any) => ({
+      studentId: entry.studentId,
+      studentName: entry.studentName,
+      code: stripPracticeBaseline(entry.code),
+      language: entry.language,
+      updatedAt: entry.updatedAt,
+    }));
 
     const endTime = report.endedAt || new Date();
     const sessionDurationMs = endTime.getTime() - report.startedAt.getTime();

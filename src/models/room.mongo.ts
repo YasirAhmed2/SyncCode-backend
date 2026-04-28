@@ -11,6 +11,8 @@ export interface IRoom extends Document {
   language: "javascript" | "python";
   mode: "broadcast" | "practice";
   isLocked: boolean;
+  /** Snapshot of shared editor text when practice mode was last enabled (used to strip template from session report). */
+  practiceCodeBaseline?: string | null;
   createdAt: Date;
 }
 
@@ -69,6 +71,10 @@ const roomSchema = new Schema<IRoom>(
     isLocked: {
       type: Boolean,
       default: false,
+    },
+    practiceCodeBaseline: {
+      type: String,
+      default: null,
     },
   },
   {

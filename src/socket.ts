@@ -338,6 +338,24 @@ const getRoomForTeacherAction = async (roomId: string, userId: string) => {
     return { room, allowed: isParticipant && isTeacher };
 };
 
+/** Persist shared doc text when practice starts; clear when returning to broadcast (session report strips this prefix). */
+const syncPracticeBaselineForRoom = async (io: Server, roomId: string, mode: 'broadcast' | 'practice') => {
+    try {
+        if (mode === 'broadcast') {
+            await Room.findOneAndUpdate({ roomId }, { $set: { practiceCodeBaseline: null } });
+            return;
+        }
+        await getOrLoadRoomYjs(roomId);
+        const ydoc = roomYDocs[roomId];
+        if (!ydoc) return;
+        const baseline = ydoc.getText(CODE_FIELD).toString();
+        await Room.findOneAndUpdate({ roomId }, { $set: { practiceCodeBaseline: baseline } });
+        io.to(roomId).emit('practice-baseline', { roomId, baseline });
+    } catch (err) {
+        console.error('[socket] syncPracticeBaselineForRoom failed', roomId, err);
+    }
+};
+
 const initSocket = (server: HttpServer) => {
     const allowedOrigins = new Set([
         'https://www.synccode.dev',
@@ -409,7 +427,7 @@ const initSocket = (server: HttpServer) => {
             io.to(roomId).emit('participants-updated', { participants });
             io.to(roomId).emit('user-joined', { userId, userName, avatarColor });
 
-            const room = await Room.findOne({ roomId }).select('teacherId mode isLocked');
+            const room = await Room.findOne({ roomId }).select('teacherId mode isLocked practiceCodeBaseline');
             if (room) {
                 roomControlState[roomId] = {
                     teacherId: room.teacherId?.toString(),
@@ -421,6 +439,9 @@ const initSocket = (server: HttpServer) => {
                     mode: room.mode,
                     isLocked: room.isLocked,
                 });
+                if (room.mode === 'practice' && typeof room.practiceCodeBaseline === 'string') {
+                    socket.emit('practice-baseline', { roomId, baseline: room.practiceCodeBaseline });
+                }
             }
 
             syncRoomActivityForTeacher(io, roomId);
@@ -655,6 +676,8 @@ const initSocket = (server: HttpServer) => {
                 isLocked: room.isLocked,
             };
 
+            await syncPracticeBaselineForRoom(io, roomId, room.mode);
+
             io.to(roomId).emit('room-mode-updated', {
                 mode: room.mode,
                 teacherId: room.teacherId,
@@ -696,6 +719,8 @@ const initSocket = (server: HttpServer) => {
                 mode: room.mode,
                 isLocked: room.isLocked,
             };
+
+            await syncPracticeBaselineForRoom(io, roomId, room.mode);
 
             io.to(roomId).emit('room-lock-updated', {
                 isLocked: room.isLocked,
