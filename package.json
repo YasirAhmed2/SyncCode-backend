@@ -7,7 +7,8 @@
     "dev": "tsx watch --import tsconfig-paths/register src/index.ts",
     "build": "tsc && tsc-alias",
     "start": "node dist/index.js",
-    "loadtest:sockets": "tsx src/scripts/socketLoadTest.ts"
+    "loadtest:sockets": "tsx src/scripts/socketLoadTest.ts",
+    "test:rag": "tsx src/scripts/ragSmokeTest.ts"
   },
   "keywords": [],
   "author": "Yasir Ahmed",
@@ -23,7 +24,9 @@
     "express-rate-limit": "^8.2.1",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.0.1",
+    "multer": "^2.3.0",
     "nodemailer": "^7.0.12",
+    "pdf-parse": "^1.1.4",
     "rate-limit-redis": "^4.3.1",
     "sib-api-v3-sdk": "^8.5.0",
     "socket.io": "^4.8.3",
@@ -35,8 +38,13 @@
     "zod": "^4.1.13"
   },
   "devDependencies": {
+    "@types/multer": "^2.2.0",
     "@types/node": "^25.0.0",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.21.0"
+  },
+  "allowScripts": {
+    "bcrypt@6.0.0": true,
+    "esbuild@0.27.1": true
   }
 }

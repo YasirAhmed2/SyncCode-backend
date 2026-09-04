@@ -14,6 +14,7 @@ import userRouter from "./routes/user.route.js";
 import roomRouter from "./routes/room.route.js";
 import executeRouter from "./routes/execute.route.js";
 import sessionRouter from "./routes/session.route.js";
+import ragRouter from "./routes/rag.route.js";
 import { globalErrorHandler } from "./middlewares/error.middleware.js";
 
 const app = express();
@@ -89,6 +90,7 @@ app.use("/execute", executeRouter);
 app.use("/user", userRouter);
 app.use("/rooms", roomRouter);
 app.use("/sessions", sessionRouter);
+app.use("/ai", ragRouter);
 
 
 app.get("/", (_req, res) => {
