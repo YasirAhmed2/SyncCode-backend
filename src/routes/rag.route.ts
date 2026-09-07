@@ -37,8 +37,18 @@ const handleUpload = (req: any, res: any, next: any) =>
     });
   });
 
+// Each upload triggers Gemini embedding calls (cost + time) — keep one teacher
+// account from hammering them, same reasoning as askLimiter above.
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "Too many uploads. Please wait a minute and try again." },
+});
+
 // Teacher: upload / remove material
-ragRouter.post("/:roomId/documents", authenticate, handleUpload, uploadDocument);
+ragRouter.post("/:roomId/documents", authenticate, uploadLimiter, handleUpload, uploadDocument);
 ragRouter.delete("/:roomId/documents/:documentId", authenticate, removeDocument);
 
 // Anyone in the room: see what is available, ask a question

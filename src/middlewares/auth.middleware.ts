@@ -5,6 +5,14 @@ import { verifyToken } from "@/utils/jwt.utils.js";
 interface JwtPayload {
   userId: string;
 }
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: { userId: string };
+    }
+  }
+}
 export const authenticate = (
   req: Request,
   res: Response,
